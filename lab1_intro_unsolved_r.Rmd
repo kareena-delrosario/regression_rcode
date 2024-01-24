@@ -1,0 +1,272 @@
+---
+title: "Regression Lab 1: Intro to R"
+author: "Kareena del Rosario"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: journal
+    highlight: zenburn
+    df_print: paged
+    toc: true
+    toc_float: true
+---
+
+Our introduction to R will be divided into 3 different subsections (orienting yourself to R, data manipulation, data visualization)
+
+    Overview of Section 1
+
+    1. Different R Platforms
+    2. R Grammar
+    3. Installing and Loading Libraries
+    4. Using Functions
+    5. Importing datasets
+
+# Level 1: Orienting yourself to R
+## Different R Platforms: R Script, R Markdown, and Colab
+
+#### R Script
+This is the basic format for RStudio. The output goes to the console. Plots output to the window in the righthand corner. '#' comments code. 
+
+#### R Markdown
+Integrates R code with narrative text. Output and plots appear directly under the code. Can be "knitted" to output an easy-to-read Word, PDF, or HTML. Code is placed in separate blocks (shortcut: CMD + Option + i), which can be modified to skip the code or hide the code in the final output. Can create an outline using '#' outside of the code blocks.
+
+#### Google Colab
+Functions like a Google Doc. Multiple users can access it at a time and does not require R to be installed. 
+
+## Understanding R Grammar
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('r_operators.png')
+```
+
+### == vs %in% vs =
+```{r}
+# these are vectors 
+# (basically, strings of values. always need to add 'c' if there is more than 1 value)
+x <- c('a', 'b', 'c')
+y <- c('c', 'b', 'a')
+```
+
+    - What's up with the <-?
+    If you want to refer to something you created in R, whether that is a dataframe, vector, or whatever, you HAVE to save it to the environment (to the right) using "<-"
+    
+#### ==
+```{r}
+# logical operator: asks the program for a match
+x == y
+```
+
+#### %in%
+```{r}
+# value matching: contains same variables
+x %in% y
+x %in% letters
+```
+
+#### =
+```{r}
+# changes variables (new = old)
+x = y
+
+print(x)
+print(y)
+```
+
+### () vs [] 
+
+#### Parentheses ()
+```{r}
+# parentheses are used for closing arguments
+result = sum(1, 2, 3)
+print(result)  # Outputs: 6
+```
+
+#### Square brackets []
+```{r}
+# square brackets are used to specify what you want in a vector or dataframe
+
+# for vectors
+v = c(10, 20, 30, 40)
+print(v[2])  # Accessing the second element, Outputs: 20
+```
+
+```{r}
+# Working with matrices or dataframes
+m = matrix(1:9, nrow=3, ncol=3)
+print(m)
+```
+
+[row, column]
+```{r}
+print(m[2, 3])  # Accessing row 2, column 3
+```
+
+```{r}
+print(m[, 1])   # Accessing all rows in column 1
+```
+
+## Installing Packages
+```{r eval= FALSE, echo=TRUE}
+## Install Packages from CRAN
+install.packages("dplyr")
+
+
+## Install Package from GitHub
+# install.packages("devtools")
+library(devtools)
+
+#devtools::install_github("DeveloperName/PackageName")
+devtools::install_github("RandiLGarcia/dyadr")
+```
+
+## Loading Packages
+```{r message=FALSE, warning=FALSE, echo=TRUE, results = 'hide'}
+# Load Packages
+library(dplyr)
+
+# One Way to Load Multiple Packages
+pkgs <- c("psych",
+          "tidyr",
+          "tidyverse",
+          "dplyr",
+          "haven",
+          "lm.beta",
+          "car",
+          "skimr",
+          "janitor", 
+          "labelled", 
+          "expss", 
+          "foreign")
+
+lapply(pkgs, library, character.only = TRUE)
+```
+    
+### Checking Packages
+```{r}
+search()
+```
+
+## Using Functions
+
+In R, there are lots of ways you can do the same thing. One example is how to call a dataframe and the variables within it. We can either enter the dataframe name into each command or we can use dplyr's pipe (this may depend on the package). 
+
+```{r echo=FALSE, out.width='30%'}
+knitr::include_graphics('pipe.png')
+```
+Here's an example using R's built in dataframe called 'iris': 
+
+```{r}
+head(iris)
+```
+
+In this exercise, we want to get the average Sepal.Length and Sepal.Width of the setosa species.
+
+### Step-by-step approach
+
+    df$variable (specify dataframe and variable within the dataframe)
+
+```{r echo = TRUE}
+# Call variable 
+iris$Species 
+```
+
+```{r}
+# Filtering the data for species 'setosa'
+filtered_data <- subset(iris, Species == "setosa")
+
+# Selecting specific columns
+selected_data <- filtered_data[,c("Sepal.Length", "Sepal.Width", "Species")]
+
+# Grouping the data ('data of interest' ~grouped_by 'Species', the data, function)
+final_result1 <- aggregate(cbind(Sepal.Length, Sepal.Width) ~ Species, selected_data, mean)
+
+print(final_result1)
+```
+
+### Dplyr approach
+
+    %>% (pipe data into functions; shortcut = CMD + Shift + M)
+
+```{r}
+library(dplyr)
+
+final_result2 <- iris %>%
+  filter(Species == "setosa") %>% # Filtering the data for species 'setosa'
+  select(Sepal.Length, Sepal.Width, Species) %>% # Selecting specific columns
+  group_by(Species) %>% # not necessary but guarantees it's kept in output
+  dplyr::summarize(average_sepal_length = mean(Sepal.Length),
+                   average_sepal_width = mean(Sepal.Width)) 
+
+print(final_result2)
+```
+
+### Calling functions
+```{r}
+?mean
+?dplyr::mutate
+```
+
+### Mini-challenge!
+
+Let's revisit () and [] using the vectors we created earlier:
+
+```{r echo=T, results='hide'}
+data <- data.frame(x, y)
+as_tibble(data)
+```
+
+```{r echo=T, results='hide'}
+new_data <- data [] # how would you subset COLUMN 2? 
+as_tibble(new_data)
+```
+
+```{r echo=T, results='hide'}
+new_data2 <- data[] # how would you subset ROW 2? 
+as_tibble(new_data2)
+```
+
+## Importing Datasets
+```{r eval= FALSE, echo=TRUE}
+## CSV
+# Saved in the same folder
+basic_df <- read.csv("depression_example_data.csv", stringsAsFactors = FALSE) # character strings will not be converted to factors
+tibble_df <- read_csv("depression_example_data.csv") # reads as tibble
+
+# Saved in different places
+# Option 1 - Set working directory
+getwd()
+setwd("/Users/kareenadelrosario/Desktop/Local R Code/NewFolder")
+read_csv("csvFileName.csv")
+
+# Option 2 - Include file path
+read_csv("/Users/kareenadelrosario/Desktop/Local R Code/NewFolder/csvFileName.csv")
+
+# Option 3 - Choose file
+read.csv(file.choose(), header = TRUE)
+
+read_sav(file.choose()) # SPSS
+read_sas(file.choose()) # SAS
+
+# Option 4 - Use Menu
+# file -> Import Dataset
+```
+## Exporting Datasets
+```{r, eval = FALSE}
+# base r
+write.csv(data, "pathway")
+
+# readr package has more export options and is slightly faster
+write_csv(data, "pathway", na ="")
+
+# haven packages allow you to export data as an SPSS or SAS file
+write_sav()
+write_sas()
+```
+
+
+### BONUS: Want to upload your R script to Colab? Make it a python file using the code below:
+```{r eval=FALSE}
+# devtools::install_github("mkearney/rmd2jupyter")
+library(rmd2jupyter)
+rmd2jupyter("lab1_datamanivis_kdr.Rmd")
+```
+
