@@ -1,0 +1,476 @@
+---
+title: 'Regression Lab 2: Data Manipulation in R'
+author: "Kareena del Rosario"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: journal
+    highlight: zenburn
+    df_print: paged
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+---
+
+## Level 2: Data Manipulation
+    
+    1. Introduction to basic data manipulation (mutate, select, filter, summarize)
+    2. Applying dplyr to real data
+    3. Intermediate data manipulation (change var class, lapply, composite scores, conditional mutate)
+    4. Restructuring datasets (wide to long, long to wide)
+    5. Writing your own functions
+    6. Using correlations to inspect your data
+
+
+### Load Packages
+```{r setup, message=FALSE, warning=FALSE, echo=TRUE, results = 'hide'}
+knitr::opts_chunk$set(echo = TRUE)
+
+pkgs <- c("psych",
+          "tidyr",
+          "tidyverse",
+          "dplyr",
+          "haven",
+          "lm.beta",
+          "car",
+          "skimr",
+          "janitor", 
+          "labelled", 
+          "expss", 
+          "foreign")
+
+lapply(pkgs, library, character.only = TRUE)
+
+library(gapminder)
+```
+
+## Examine Data
+```{r}
+colnames(gapminder)
+```
+
+```{r}
+skim(gapminder)
+```
+
+```{r}
+glimpse(gapminder)
+```
+
+## Variable Class
+### Before you run any analyses, you'll need to make sure the variable class is correct (e.g. factor vs numeric vs character). 
+```{r}
+# View class of each variable
+lapply(gapminder, class)
+
+# Factor = Nominal in SPSS
+```
+
+## Intro to Dplyr
+### Select, Filter, Mutate, Arrange, Transmute
+
+#### Select allows us to easily subset our data by only selecting the desired variables.
+```{r}
+# new_df <-
+gapminder %>%
+  select (country, lifeExp)
+```
+
+#### Filter, just like the filter function in SPSS, allows us to work with the cases that meet certain criteria
+
+```{r}
+# filtered_df <-
+gapminder %>%
+  filter(continent == "Africa", year > 1990) %>%
+  head()
+
+# Saves in global environment
+```
+
+##### DATASET COPY  filtered_df.
+
+##### DATASET ACTIVATE  filtered_df.
+
+##### FILTER OFF.
+
+##### USE ALL.
+
+##### SELECT IF ((continent = 'Africa')  & (year > 1990)).
+
+##### EXECUTE.
+
+#### Mutate creates new variables or changes existing variables (if you do not provide a new name). The SPSS equivalent is COMPUTE VARIABLE.
+```{r}
+gapminder %>%
+  mutate(log.gdp = log(gdpPercap)) %>%
+  head()
+```
+##### COMPUTE diff.gdp=gdpPercap - mean(gdpPercap).
+
+##### EXECUTE.
+```{r}
+gapminder %>%
+  mutate(diff.gdp = gdpPercap - mean(gdpPercap, na.rm = TRUE)) %>%
+  head()
+
+?mean
+```
+
+#### Summarize (or summarise) calculates a single value per group. Useful for aggregating data.
+```{r}
+gapminder %>%
+  group_by(year) %>%
+  dplyr::summarize(mean_gdp = mean(gdpPercap)) %>%
+  arrange(desc(year))
+```
+
+    Other functions you may want to use with mutate and summarize:
+
+    1. sum (x, na.rm = TRUE)
+    2. max (x, na.rm = TRUE)
+    3. min (x, na.rm = TRUE)
+    4. n_distinct (x) <- count number of unique instances
+
+# Dplyr cheatsheet 
+```{r, echo=FALSE}
+
+knitr::include_graphics('data-transformation.png')
+```
+
+```{r, echo=FALSE}
+
+knitr::include_graphics('data-transformation2.png')
+```
+
+### Challenge!
+
+1. Create a dataframe that contains the average life expectancy for each continent.
+
+2. Generate a dataframe that shows the total population per year for each country in Europe.
+
+3. Create a dataframe that only includes Asian countries with a life expectancy greater than 70 years in the year 2007. This subset should ONLY include these variables: continent, year, and lifeExp.
+
+## Using a real dataset
+
+Here, we're using some a real dataset with responses from the Interpersonal Reactivity Index (IRI). This is a common measure for trait empathy. Now, before we **could** analyze it, we need to make some changes to the data. 
+
+1. Variables *ID, Dyad, Condition* need to be treated like *factors*
+2. We need to delete one variable (iri1)
+3. Some participants should be excluded, so we want to remove those cases
+4. Some items on the IRI need to be reverse-scored
+5. Create a composite score, representing each participant's trait empathy. **Based on the IRI documentation, this should be a *sum* not a *mean* (varies by measure)**
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+emp_df <- read_csv("/Users/kareenadelrosario/Desktop/Local R Code/Empathy_Background_randomized.csv")
+```
+
+### Examine Data
+```{r}
+colnames(emp_df)
+```
+
+### Change Variable Class
+```{r}
+#### Option 1
+# Change ID, Dyad, and Condition to factor
+emp_df$ID <- as.factor(emp_df$ID)
+class(emp_df$ID)
+
+#### Option 2
+## Useful when converting multiple variables. Note: [,X] = by column
+# Convert categorical variables to factor
+names <- c(1:2, 31)
+emp_df[,names] <- lapply(emp_df[,names], factor)
+head(lapply(emp_df, class))
+
+#### Option 3
+## Use dplyr to change class and apply value labels
+# Label gender and condition and make sure they're classified as factors
+emp_df <- 
+  emp_df %>%
+  mutate(ID = factor(ID),
+         Dyad = factor(Dyad),
+         Condition = factor(Condition, labels = c("Sad", "Control"))) # Change from 0,1 to Control and Sad
+
+#### Option 4
+## Use dplyr to change class and apply value labels with across()
+emp_df <- 
+    emp_df %>%
+    mutate(across(c(ID, Dyad, Condition), as.factor))  
+
+emp_df <- 
+    emp_df %>% 
+    mutate(across(where(is.character), as.factor))
+
+
+emp_df %>% 
+  select(ID, Dyad, Condition) %>%
+  head()
+```
+
+### Remove Variables (Columns) and Cases (Rows)
+#### Variables
+```{r}
+# Delete variables
+emp_df %>%
+  select(-c(iri1)) %>%
+  head()
+```
+#### Cases
+```{r}
+# Exclude participants by dyad ID
+emp_df <- emp_df[ !(emp_df$Dyad %in% c(121, 124, 158, 168, 153)), ]
+
+# Or by row number
+emp_df %>%
+  slice(-c(58:59, 117:118, 137:138, 107:108))
+```
+
+### Composite Scores
+```{r}
+#### Option 1
+reverse <- emp_df %>%
+  mutate(iri3r = 6 - iri3,
+         iri4r = 6 - iri4,
+         iri7r = 6 - iri7,
+         iri12r = 6 - iri12,
+         iri13r = 6 - iri13,
+         iri14r = 6 - iri14,
+         iri15r = 6 - iri15,
+         iri18r = 6 - iri18,
+         iri19r = 6 - iri19)
+
+#### Option 2
+# rowwise tells r to go by ROW not column
+# we can also reverse code in one step! (Add -6 before item)
+emp_df <- emp_df %>%
+  rowwise() %>%
+  mutate(emp_sum = sum(c(iri1, iri2, 6-iri3, 6-iri4, iri5, iri6, 6-iri7, iri8, iri9, iri10,iri11,6-iri12,6-iri13,6-iri14,6-iri15,iri16,iri17,6-iri18,6-iri19,iri20,iri21,iri22,iri23,iri24,iri25,iri26,iri27,iri28)))
+```
+
+Amazing! Now let's move onto something a bit harder. Let's talk about conditional mutates and restructuring the dataframe.
+
+### Conditional mutate (ifelse)
+
+Using the same dataset, we want to add a few new ID and condition variables. After completing the IRI, participants were paired in dyads, half of which were in the *sad dyads* while the other half were in the *control dyads*. 
+
+Within the *sad dyad*, 1 person was in the *sad condition* (told a sad story) and their partner was in the *control condition* (told a neutral story). 
+
+Both participants in the *control dyads* told a neutral story.
+
+```{r echo=FALSE, out.width='30%'}
+knitr::include_graphics('sad_cond.png')
+```
+
+Right now, we just have the ID, Dyad, and Dyad-level Condition variables, but we want to create new variables that reflect this complexity (e.g., differentiate between the participants in the *sad dyad*: were they the *sad actor* or *control partner*?)
+
+The ID variable is the same thing as the Dyad variable except it has a 1 (Actor) and 2 (Partner) at the end. For example, *Dyad 200* has *participant 2001 (Actor)* and *participant 2002 (Partner)*.
+
+1. Identify the actor vs partner in each dyad by creating a partner variable
+2. 
+
+#### In SPSS: COMPUTE VARIABLE (IF)
+```{r}
+# This dataset does not have a "partner" variable, which is super important for dyadic data. 
+
+# we'll need to make ID and Dyad numeric to calculate partner
+emp_df %>% 
+  transmute(ID.n = as.numeric(ID)) #issue with converting factor to numeric
+
+## Use mutate to create a "partner" variable.
+emp_df <- emp_df %>%
+  mutate(ID.n = as.numeric(as.character(ID)),
+         Dyad.n = as.numeric(as.character(Dyad)),
+         partner = ID.n - (Dyad.n * 10)) %>%
+  mutate(partner = factor(partner))
+
+# Preview variables
+emp_df %>%
+  select(Dyad, ID, partner)
+```
+
+```{r}
+## If we wanted to recode an existing variable, we could use this function: 
+emp_df$Condition[emp_df$Condition == 1] <- 'Sad'
+
+## We'll need to create a new condition variable to distinguish each individual condition (sad actors vs sad partners vs control dyad)
+emp_df_recode <- emp_df %>%
+  mutate(p_cond = ifelse( (Condition == "Sad") & (partner == 1), 2,
+                          ifelse( (Condition == "Sad") & (partner == 2), 1, 3))) %>%
+  mutate(p_cond = factor(p_cond))
+
+#### Sad Partner = 1
+#### Sad Actor = 2
+#### Control Dyad = 3
+
+## Double-check new variable
+emp_df_recode %>%
+  select(ID, Condition, partner, p_cond)
+```
+
+```{r}
+# Remove missing values from emp_df
+emp_df_recode <- emp_df_recode %>%
+  drop_na(emp_sum, Condition) %>%
+  group_by (Dyad) %>%
+  filter(n() == 2) %>%
+  ungroup()
+```
+
+# Restructuring Dataset
+
+### Wide vs Long Format
+```{r echo=FALSE, out.width='60%'}
+knitr::include_graphics('wide_ex.png')
+```
+
+```{r echo=FALSE, out.width='40%'}
+knitr::include_graphics('long_ex.png')
+```
+
+## Wide to Long
+```{r message=FALSE, warning=FALSE}
+# Create the dataframe
+df_wide <- data.frame(
+  ID = c(9991, 9992, 9993, 9994),
+  '1990' = c(3, 2, 1, 4),
+  '1992' = c(4, 5, 5, 2),
+  '1994' = c(2, 3, 5, 3),
+  '1996' = c(4, 4, 2, 5),
+  check.names = FALSE # R doesn't love numerical column names. this tells it to chill out.
+)
+
+print(df_wide)
+```
+
+
+### Pivot_longer() from tidyr
+
+Now, we want to change this so that it's in long format. There should be multiple entries for each ID and Year should be a single variable.
+```{r}
+#### Option 1
+df_long <- pivot_longer(df_wide,
+                        cols = !ID, # variables that should be left alone
+                        names_to = "Year", # header of wide_df
+                        values_to = "Value") # values that correspond to variable names
+head(df_long)
+
+
+#### Option 2
+df_wide %>%
+ pivot_longer(
+   cols = starts_with("199"), # could specify which columns to pivot
+   names_to = "Year",
+   values_to = "Value",
+   values_drop_na = TRUE # exclude NAs
+ )
+```
+
+## Long to wide
+### Pivot_wider()
+
+Let's reverse it and spread out the Year.
+```{r}
+df_wide2 <- pivot_wider(df_long,
+                        names_from = Year,
+                        values_from = Value,
+                        values_fill = 999) # fill NA with 999
+
+head(df_wide2)
+```
+
+```{r}
+### Is it identical to our other wide df?
+setequal(df_wide, df_wide2)
+```
+
+## Introduction to Writing Functions
+
+```{r}
+var_mean <- function(variable)
+{
+  mean <- sum(variable)/length(variable)
+  cat("Mean = ", mean)
+}
+
+# Create data
+test_data <- c(5,12,98,23,45,7,86,34)
+
+# Now let's try it out
+var_mean(test_data)
+```
+
+## Using Functions for Things We Normally Can't Do in R
+
+### shorten existing functions with partial() from the purrr package
+```{r, message=FALSE}
+library(purrr)
+
+# adding shortcuts
+mymean <- partial(mean, na.rm = TRUE)
+```
+
+### create your own function 
+
+```{r}
+descriptive_table <- function(x) { # our function accepts just a variable. if in a df, it'll be df$variable
+  tab_mean <- mymean(x) # compute mean
+  tab_sd <- sd(x, na.rm = TRUE) # compute sd
+  tab_min <- min(x, na.rm = TRUE) # find minimum value
+  tab_max <- max(x, na.rm = TRUE) # find maximum value
+	cat("Summary of descriptive statistics\n") # print title
+	cat("Mean:               ", tab_mean, "\n") # print mean... and so on.
+	cat("Standard Deviation: ", tab_sd, "\n")
+	cat("Minimum:            ", tab_min,    "\n")
+	cat("Maximum:            ", tab_max,    "\n")
+  
+}
+
+
+descriptive_table(emp_df_recode$iri12)
+```
+# Quick guide to correlations in R
+
+To compute basic correlation coefficients there are three main functions that can be used: *cor(), cor.test() and rcorr()*. functions. The functions *cor()* and *cor.test()* are part of the base system in R, but *rcorr()* is part of the Hmisc package. The output varies between the three: if you want a confidence interval then you will have to use *cor.test()*, and if you want correlation coefficients for multiple pairs of variables then you cannot use *cor.test()*; similarly, if you want p-values then *cor()* won’t help you, etc.
+
+## cor()
+
+Here, we’re looking at the correlation between iri at Time 1 and Time 2. cor() only outputs correlation.
+
+```{r}
+# Note that cor does not like NAs. Check doc using ?cor for NA options
+# pearson correlation is default
+cor(emp_df_recode$iri2, emp_df_recode$iri3, use = "complete.obs")
+
+# rank correlation coefficient
+cor(emp_df_recode$iri2, emp_df_recode$iri3, use = "complete.obs", method = "spearman")
+```
+
+We could also run correlation matrix using the following:
+```{r}
+cor(emp_df_recode[,c("iri2", "iri3", "iri4")], use = "complete.obs")
+```
+
+#### How would you interpret this matrix?
+
+## cor.test()
+
+cor.test is a correlation test between paired samples. It outputs the correlation plus the 95% CI, t-stat, df, and p-value.
+
+```{r}
+cor.test(emp_df_recode$iri2, emp_df_recode$iri3)
+```
+
+## rcorr()
+load library(Hmisc). rcorr outputs correlation matrix, n, and p values.
+```{r, message=FALSE}
+library(Hmisc)
+
+# convert df into a matrix
+matrix1 <- as.matrix(emp_df_recode[,c("iri2", "iri3", "iri4")])
+
+# correlation matrix
+rcorr(matrix1)
+```
+
