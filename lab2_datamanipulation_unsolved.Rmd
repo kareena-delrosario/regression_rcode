@@ -4,13 +4,9 @@ author: "Kareena del Rosario"
 date: "`r Sys.Date()`"
 output:
   html_document:
-    theme: journal
-    highlight: zenburn
+    theme: spacelab
+    highlight: arrow
     df_print: paged
-    toc: true
-    toc_float: true
-  pdf_document:
-    toc: true
 ---
 
 ## Level 2: Data Manipulation
@@ -19,11 +15,12 @@ output:
     2. Applying dplyr to real data
     3. Intermediate data manipulation (change var class, lapply, composite scores, conditional mutate)
     4. Restructuring datasets (wide to long, long to wide)
-    5. Writing your own functions
-    6. Using correlations to inspect your data
+    5. Using correlations to inspect your data
+    BONUS: Writing your own functions
 
 
 ### Load Packages
+
 ```{r setup, message=FALSE, warning=FALSE, echo=TRUE, results = 'hide'}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -47,6 +44,7 @@ library(gapminder)
 
 ## Examine Data
 ```{r}
+# extract variable names
 colnames(gapminder)
 ```
 
@@ -59,7 +57,26 @@ glimpse(gapminder)
 ```
 
 ## Variable Class
+
 ### Before you run any analyses, you'll need to make sure the variable class is correct (e.g. factor vs numeric vs character). 
+
+
+  **Variable Classes**
+    
+    1. Integers are whole numbers without decimal points.
+    
+    2. Numeric/double is a general class that includes both 
+      decimals (floating-point numbers) and integers. 
+    
+    3. Factor represents categorical data. 
+      They can store both string and integer values.
+    
+    4. Character represents a string in R. 
+    
+    5. Logical represents boolean values, with 
+      TRUE, FALSE, and NA as possible values.
+
+
 ```{r}
 # View class of each variable
 lapply(gapminder, class)
@@ -80,44 +97,50 @@ gapminder %>%
 #### Filter, just like the filter function in SPSS, allows us to work with the cases that meet certain criteria
 
 ```{r}
-# filtered_df <-
+# filtered_df <- # Saves in global environment
 gapminder %>%
   filter(continent == "Africa", year > 1990) %>%
   head()
 
-# Saves in global environment
 ```
 
-##### DATASET COPY  filtered_df.
-
-##### DATASET ACTIVATE  filtered_df.
-
-##### FILTER OFF.
-
-##### USE ALL.
-
-##### SELECT IF ((continent = 'Africa')  & (year > 1990)).
-
-##### EXECUTE.
+  **SPSS Syntax: Filtering**
+  
+    DATASET COPY  filtered_df.
+    DATASET ACTIVATE  filtered_df.
+    FILTER OFF.
+    USE ALL.
+    SELECT IF ((continent = 'Africa')  & (year > 1990)).
+    EXECUTE.
 
 #### Mutate creates new variables or changes existing variables (if you do not provide a new name). The SPSS equivalent is COMPUTE VARIABLE.
+
 ```{r}
 gapminder %>%
   mutate(log.gdp = log(gdpPercap)) %>%
   head()
 ```
-##### COMPUTE diff.gdp=gdpPercap - mean(gdpPercap).
 
-##### EXECUTE.
+   **SPSS Syntax: Compute variable**
+    
+    COMPUTE diff.gdp=gdpPercap - mean(gdpPercap).
+    EXECUTE.
+    
 ```{r}
 gapminder %>%
   mutate(diff.gdp = gdpPercap - mean(gdpPercap, na.rm = TRUE)) %>%
   head()
+```
 
-?mean
+#### Transmute is a mix between select and mutate
+
+```{r}
+gapminder %>%
+  transmute (country, population_divided = pop/2)
 ```
 
 #### Summarize (or summarise) calculates a single value per group. Useful for aggregating data.
+
 ```{r}
 gapminder %>%
   group_by(year) %>%
@@ -125,7 +148,7 @@ gapminder %>%
   arrange(desc(year))
 ```
 
-    Other functions you may want to use with mutate and summarize:
+  **Other functions you may want to use with mutate and summarize:**
 
     1. sum (x, na.rm = TRUE)
     2. max (x, na.rm = TRUE)
@@ -133,12 +156,12 @@ gapminder %>%
     4. n_distinct (x) <- count number of unique instances
 
 # Dplyr cheatsheet 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width = '140%'}
 
 knitr::include_graphics('data-transformation.png')
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width = '140%'}
 
 knitr::include_graphics('data-transformation2.png')
 ```
@@ -150,6 +173,8 @@ knitr::include_graphics('data-transformation2.png')
 2. Generate a dataframe that shows the total population per year for each country in Europe.
 
 3. Create a dataframe that only includes Asian countries with a life expectancy greater than 70 years in the year 2007. This subset should ONLY include these variables: continent, year, and lifeExp.
+
+--------------
 
 ## Using a real dataset
 
@@ -385,51 +410,8 @@ head(df_wide2)
 setequal(df_wide, df_wide2)
 ```
 
-## Introduction to Writing Functions
+---------
 
-```{r}
-var_mean <- function(variable)
-{
-  mean <- sum(variable)/length(variable)
-  cat("Mean = ", mean)
-}
-
-# Create data
-test_data <- c(5,12,98,23,45,7,86,34)
-
-# Now let's try it out
-var_mean(test_data)
-```
-
-## Using Functions for Things We Normally Can't Do in R
-
-### shorten existing functions with partial() from the purrr package
-```{r, message=FALSE}
-library(purrr)
-
-# adding shortcuts
-mymean <- partial(mean, na.rm = TRUE)
-```
-
-### create your own function 
-
-```{r}
-descriptive_table <- function(x) { # our function accepts just a variable. if in a df, it'll be df$variable
-  tab_mean <- mymean(x) # compute mean
-  tab_sd <- sd(x, na.rm = TRUE) # compute sd
-  tab_min <- min(x, na.rm = TRUE) # find minimum value
-  tab_max <- max(x, na.rm = TRUE) # find maximum value
-	cat("Summary of descriptive statistics\n") # print title
-	cat("Mean:               ", tab_mean, "\n") # print mean... and so on.
-	cat("Standard Deviation: ", tab_sd, "\n")
-	cat("Minimum:            ", tab_min,    "\n")
-	cat("Maximum:            ", tab_max,    "\n")
-  
-}
-
-
-descriptive_table(emp_df_recode$iri12)
-```
 # Quick guide to correlations in R
 
 To compute basic correlation coefficients there are three main functions that can be used: *cor(), cor.test() and rcorr()*. functions. The functions *cor()* and *cor.test()* are part of the base system in R, but *rcorr()* is part of the Hmisc package. The output varies between the three: if you want a confidence interval then you will have to use *cor.test()*, and if you want correlation coefficients for multiple pairs of variables then you cannot use *cor.test()*; similarly, if you want p-values then *cor()* won’t help you, etc.
@@ -474,3 +456,53 @@ matrix1 <- as.matrix(emp_df_recode[,c("iri2", "iri3", "iri4")])
 rcorr(matrix1)
 ```
 
+----------
+
+## BONUS: Introduction to Writing Functions
+
+To introduce you to what goes into writing a function, let's create a function that computes a mean.
+```{r}
+var_mean <- function(variable) # what does the function require to be input
+{
+  mean <- sum(variable)/length(variable) # how is a mean calculated
+  cat("Mean = ", mean) # what it should print
+}
+
+# Let's test it out!
+
+# Create data
+test_data <- c(5,12,98,23,45,7,86,34)
+
+# Now let's try it out
+var_mean(test_data)
+```
+
+## Using Functions for Things We Normally Can't Do in R
+
+### Option 1: create your own function 
+
+```{r}
+descriptive_table <- function(x) { # our function accepts just a variable. if in a df, it'll be df$variable
+  tab_mean <- mean(x, na.rm = TRUE) # compute mean
+  tab_sd <- sd(x, na.rm = TRUE) # compute sd
+  tab_min <- min(x, na.rm = TRUE) # find minimum value
+  tab_max <- max(x, na.rm = TRUE) # find maximum value
+	cat("Summary of descriptive statistics\n") # print title
+	cat("Mean:               ", tab_mean, "\n") # print mean... and so on.
+	cat("Standard Deviation: ", tab_sd, "\n")
+	cat("Minimum:            ", tab_min,    "\n")
+	cat("Maximum:            ", tab_max,    "\n")
+  
+}
+
+
+descriptive_table(emp_df_recode$iri12)
+```
+
+### Option 2: shorten existing functions with partial() from the purrr package
+```{r, message=FALSE}
+library(purrr)
+
+# adding shortcuts
+mymean <- partial(mean, na.rm = TRUE)
+```
