@@ -1,0 +1,377 @@
+---
+title: "Regression Lab 3: Data Visualization in R"
+author: "Kareena del Rosario"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: journal
+    highlight: zenburn
+    df_print: paged
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+---
+
+### Level 3: Data Visualization
+
+    1. Intro to the layers of ggplot (data, aes, geom)
+    2. Changing the aesthetics (shape, color, size, fill, alpha)
+    3. Scatterplots
+    4. Histograms
+    5. Boxplots
+    6. Bar Graphs
+    7. Line Graphs
+    BONUS: Animated Graphs
+    
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pkgs <- c("psych",
+          "tidyr",
+          "tidyverse",
+          "dplyr",
+          "haven",
+          "lm.beta",
+          "car",
+          "skimr",
+          "janitor", 
+          "labelled", 
+          "expss", 
+          "foreign")
+
+lapply(pkgs, library, character.only = TRUE)
+```
+
+# Data Visualization
+#### Exam and festival datasets are from: https://studysites.sagepub.com/dsur/study/articles.htm
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(reshape)
+library(plyr)
+```
+
+#### There are three essential grammatical elements: data, aesthetics, and geometries. 
+
+#### 1. The data is obviously the data which we want to plot. 
+
+#### 2. The aesthetics layer refers to the scales onto which we will map our data.
+
+#### 3. The geom layer refers to the actual shape the data will take in the plot.
+
+```{r, warning = FALSE}
+mtcars$cyl <- as.factor(mtcars$cyl)
+
+# Data, aethetics (x, y), point
+ggplot(mtcars, aes(cyl, mpg)) +
+  geom_point()
+```
+
+```{r, warning = FALSE}
+# Change the color aesthetic to a size aesthetic
+ggplot(mtcars, aes(wt, mpg, color = disp, size = disp)) +
+  geom_point()
+```
+
+#### Aesthetics using aes() 
+
+As a general rule, if you want to set an aesthetic to a specific value, you would specify that outside of aes(). For example, if you specify (color = "blue"), you would not place it in aes(). However, if you want to specify how the aesthetics should be used, you would place it inside aes(). For example, if you want gender to be represented as separate colors, you would use (aes(color = gender)). 
+
+## Scatterplots
+### Aesthetic Options: geom_point ()
+#### Shape, color, size, fill, alpha
+```{r echo = T, results = 'hide'}
+examData <- read.delim("Exam Anxiety.dat",  header = TRUE)
+```
+
+```{r, warning = FALSE}
+#Simple scatter
+scatter <- ggplot(examData, aes(Anxiety, Exam))
+scatter + geom_point() + labs(x = "Exam Anxiety", y = "Exam Performance %") 
+```
+
+### Aesthetic Options: geom_smooth ()
+
+#### Color, size, fill, linetype, weight, alpha
+```{r, warning = FALSE}
+#Simple scatter with smooth with CI
+scatter <- ggplot(examData, aes(Anxiety, Exam))
+scatter + geom_point() + geom_smooth() + labs(x = "Exam Anxiety", y = "Exam Performance %") 
+```
+
+```{r message=FALSE, warning=FALSE}
+#Simple scatter with regression line
+scatter <- ggplot(examData, aes(Anxiety, Exam))
+scatter + geom_point() + geom_smooth(method = "lm", colour = "Red", se = F) + labs(x = "Exam Anxiety", y = "Exam Performance %") 
+```
+
+```{r message=FALSE, warning=FALSE}
+#Simple scatter with regression line + CI
+scatter <- ggplot(examData, aes(Anxiety, Exam))
+scatter + geom_point() + geom_smooth(method = "lm", colour = "Red") + labs(x = "Exam Anxiety", y = "Exam Performance %") 
+```
+
+```{r message=FALSE, warning=FALSE}
+#Simple scatter with regression line + coloured CI
+scatter <- ggplot(examData, aes(Anxiety, Exam))
+scatter + geom_point() + geom_smooth(method = "lm", colour = "Red", alpha = 0.1, fill = "Red") + labs(x = "Exam Anxiety", y = "Exam Performance %") 
+```
+
+```{r message=FALSE, warning=FALSE}
+#Grouped scatter with regression line + CI
+scatter <- ggplot(examData, aes(Anxiety, Exam, colour = Gender))
+
+scatter + geom_point() + geom_smooth(method = "lm", aes(fill = Gender), alpha = 0.1) + labs(x = "Exam Anxiety", y = "Exam Performance %", colour = "Gender")
+```
+
+### Change colors
+```{r message=FALSE, warning=FALSE}
+scatter2 <- scatter + geom_point() + geom_smooth(method = "lm", aes(fill = Gender), alpha = 0.1) + labs(x = "Exam Anxiety", y = "Exam Performance %", colour = "Gender")
+
+# Scatter plot
+scatter2 + scale_color_manual(values=c("blue", "green"))
+
+# Change line color
+# http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
+scatter2 + scale_color_manual(values=c("deepskyblue1", "darkseagreen1"))
+
+# Change panel color
+scatter2 + theme(panel.background = element_rect(fill = 'white'))
+
+# Change plot color
+scatter2 + theme(plot.background = element_rect(fill = 'black', color = 'black'),
+                 panel.background = element_rect(fill = 'black'),
+                 axis.title = element_text(color = 'white'))
+```
+
+## Histograms
+### Aesthetic Options: geom_histogram ()
+#### Color, size, fill, linetype, weight, alpha
+```{r echo = T, results = 'hide'}
+festivalData <- read.delim("DownloadFestival(No Outlier).dat",  header = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+festivalHistogram <- ggplot(festivalData, aes(day1))
+
+festivalHistogram + geom_histogram(binwidth = 0.4) + labs(x = "Hygiene (Day 1 of Festival)", y = "Frequency")
+```
+
+```{r message=FALSE, warning=FALSE}
+# install.packages("extrafont")
+library(extrafont)
+
+# Change color and font
+festivalHistogram + geom_histogram(binwidth=0.2,color="black", fill="lightskyblue2") + theme(text = element_text(size = 12, family = "Comic Sans MS")) + facet_wrap("gender")
+```
+
+### Density Plots
+```{r, warning = FALSE}
+festivalDensity <- ggplot(festivalData, aes(day1))
+festivalDensity + geom_density() + labs(x = "Hygiene (Day 1 of Festival)", y = "Density Estimate")
+```
+
+```{r, warning = FALSE}
+# Density by gender
+festivalDensity + geom_density() + aes(fill = gender)
+
+# Change opacity and labels
+festivalDensity + geom_density(aes(fill = gender), alpha = 0.4) + labs(x = "Hygiene (Day 1 of Festival)", y = "Density Estimate")
+```
+
+## Boxplots
+### Aesthetic Options: geom_boxplot ()
+#### Color, size, fill, weight, alpha
+```{r, warning = FALSE}
+festivalBoxplot2 <- ggplot(festivalData, aes(gender, day1))
+festivalBoxplot2 + geom_boxplot() + labs(x = "Gender", y = "Hygiene (Day 1 of Festival)")
+```
+
+```{r, warning = FALSE}
+festivalBoxplot2 + geom_boxplot(aes(fill = gender)) + geom_point() + labs(x = "Gender", y = "Hygiene (Day 1 of Festival)")
+```
+
+```{r, warning = FALSE}
+festivalBoxplot2 + geom_boxplot(aes(fill = gender)) + geom_jitter(alpha = 0.2) + labs(x = "Gender", y = "Hygiene (Day 1 of Festival)")
+```
+
+## Bar Charts
+#### Stat_summary () comes from the Hmisc package and can be added a layer to your graphs.
+```{r, warning = FALSE}
+library(haven)
+#load dictator game data
+df_dg <- read_sav("sample_dictatorgame.sav")
+
+# inspect data
+head(df_dg)
+
+# change condition to factor with labels
+df_dg$condition[df_dg$condition == -1] <- "Control"
+df_dg$condition[df_dg$condition == 1] <- "Experimental"
+df_dg$role[df_dg$role == -1] <- "Partner"
+df_dg$role[df_dg$role == 1] <- "Actor"
+```
+
+```{r, message = FALSE, warning = FALSE}
+bar <- ggplot(df_dg, aes(condition, share))
+
+bar2 <- bar + 
+  stat_summary(aes(condition, share, fill = role ), 
+                           fun = mean, # display the means
+                           geom = "bar", 
+                           position="dodge") + 
+  stat_summary(aes(condition, share, fill = role ), 
+               fun.data = mean_cl_normal, # 95% CI assuming normality (other option would be _boot)
+               geom = "errorbar", 
+               position=position_dodge(width=0.90), 
+               width = 0.2) + 
+  labs(x = "Condition", y = "Money Shared", fill = "Role") + 
+  scale_fill_manual(values=c("deepskyblue1", "slategray3"))
+
+bar2
+```
+
+```{r, warning = FALSE}
+library(ggsignif)
+bar <- ggplot(df_dg, aes(condition, share))
+
+bar2 + 
+  scale_y_continuous(breaks=seq(0, 15, 1)) + # specifies breaks (0-15 at every 1pt) 
+  coord_cartesian(ylim =c(0, 15)) + # y-axis on 0-15 scale
+  geom_signif(y_position = c(7.6, 8.5), xmin = c(0.8, 1.8), xmax = c(1.2, 2.2), #sig bars between roles
+              annotation = c("NS", "**"), tip_length = 0, color= "#756F6F") + 
+  geom_signif(comparisons = list(c("Control", "Experimental")), map_signif_level=TRUE, #sig bars between condition 
+              annotations = "NS", y_position = 11, color= "#756F6F")  + theme_classic()
+```
+
+## Line Graphs
+```{r, warning = FALSE}
+depression_data <- read.csv("depression_example_data.csv")
+# Simulate meaningful fake data
+## Depression over time with/without treatment
+fake_data3 <- sample(c(0,1), size = nrow(depression_data), replace = TRUE)
+fake_data3 <- as.data.frame(ifelse(fake_data3==1, yes = rnorm(20, 20, 1), no = rnorm(20, 20, 1)))
+dep_data <- cbind(depression_data, fake_data3)
+names(dep_data)[4] <- "Baseline"
+
+fake_data <- sample(c(0,1), size = nrow(depression_data), replace = TRUE)
+fake_data <- as.data.frame(ifelse(fake_data==1, yes = rnorm(20, 20, 2), no = rnorm(20, 12, 2)))
+names(fake_data)[1] <- "Six_Weeks"
+fake_data <- fake_data %>% arrange(Six_Weeks)
+dep_data <- dep_data %>% arrange(desc(intervention))
+dep_data <- cbind(dep_data, fake_data)
+
+dep_data$intervention[dep_data$intervention == 0] <- "No Intervention"
+dep_data$intervention[dep_data$intervention == 1] <- "Intervention"
+
+dep_data$ID <- seq_along(dep_data[,1])
+```
+
+### Challenge! 
+
+This is a longitudinal dataset. To plot it as a line graph, we'll need to convert it to a *long* dataset. Use *pivot_longer()* to reshape the data and call the new dataframe *"dep_data1*"
+```{r, include=FALSE}
+# Reshape wide to long
+dep_data1 <- dep_data %>%
+  pivot_longer(cols = -c("ID", "intervention", "depression", "weeks"),
+               names_to = "Time",
+               values_to = "Depression_Level") %>% 
+  arrange(ID)
+```
+
+### Plot the long data as a line graph
+```{r, warning = FALSE}
+line <- ggplot(dep_data1, aes(Time, Depression_Level, color = intervention))
+line + stat_summary(fun = mean, geom = "line", aes(group = intervention))
+```
+
+```{r, warning = FALSE}
+line + stat_summary(fun = mean, geom = "line", aes(group= intervention)) + stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.2) + labs(x = "Time", y = "Depression", colour = "Intervention") + ylim(5, 30)
+```
+
+
+```{r, warning = FALSE}
+line + 
+  stat_summary(fun = mean, geom = "point", aes(shape = intervention), size = 4) + # Shape of point by group
+  stat_summary(fun = mean, geom = "line", aes(group= intervention, linetype = intervention)) + # Dashed or solid line by group
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.2) + # 95% CI
+  labs(x = "Time", y = "Mean Depression Score", colour = "Group", shape= "Group", linetype = "Group") + ylim(5, 30) # Labels and range of y-axis
+
+```
+
+## Exploratory graphs
+```{r, warning = FALSE}
+library(RColorBrewer)
+library(gapminder)
+library(dplyr)
+gm2007.1 <- gapminder %>%
+  filter(year == 2007) %>%
+  slice_max(lifeExp, n = 10)
+
+gm2007.2 <- gapminder %>%
+  filter(year == 2007) %>%
+  slice_min(lifeExp, n = 10)
+
+gm2007 <- rbind(gm2007.1, gm2007.2)
+
+# Add a geom_segment() layer
+ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+  geom_point(size = 4) +
+  geom_segment(aes(xend = 30, yend = country), size = 2)
+
+# Set the color scale
+palette <- brewer.pal(5, "RdYlBu")[-(2:4)]
+
+global_mean <- mean(gm2007$lifeExp)
+x_start <- global_mean + 3
+y_start <- 13
+x_end <- global_mean
+y_end <- 13.5
+
+# Add a title and caption
+plt_country_vs_lifeExp <- ggplot(gm2007, aes(x = lifeExp, y = country, color = lifeExp)) +
+  geom_point(size = 4) +
+  geom_segment(aes(xend = 30, yend = country), size = 2) +
+  geom_text(aes(label = round(lifeExp,1)), color = "white", size = 1.5) +
+  scale_x_continuous("", expand = c(0,0), limits = c(30,90), position = "top") +
+  scale_color_gradientn(colors = palette) +
+  labs(title = "Highest and lowest life expectancies, 2007", caption = "Source: gapminder")
+
+plt_country_vs_lifeExp +
+  theme_classic() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.title = element_blank(),
+        legend.position = "none") +
+  geom_vline(xintercept = global_mean, color = "grey40", linetype = 3) +
+  annotate("text", x = x_start, y = y_start, label = "The\nglobal\naverage", vjust = 1.1, size = 3, family = "Times", color = "grey40") +
+  annotate("curve", x = x_start, y = y_start, xend = x_end, yend = y_end, arrow = arrow(length = unit(0.1, "cm"), type = "closed"), color = "grey40"
+  )  
+ # theme(text = element_text(family = "Times"))
+```
+
+### Animated Graphs
+#### Code from: https://gganimate.com/
+```{r fig4, out.width = '130%'}
+### Install animation packages
+#devtools::install_github('thomasp85/gganimate')
+library(gganimate)
+#install.packages("gifski")
+library(gifski)
+
+library(gapminder)
+gg <- gapminder
+
+ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, colour = country)) +
+  geom_point(alpha = 0.7, show.legend = FALSE) +
+  scale_colour_manual(values = country_colors) +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  facet_wrap(~continent) +
+  # Here comes the gganimate specific bits
+  labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') +
+  transition_time(year) +
+  ease_aes('linear')
+```
+
+
