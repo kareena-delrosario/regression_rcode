@@ -1,0 +1,414 @@
+---
+title: "T-tests in R"
+author: "Kareena del Rosario"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: lumen
+    highlight: arrow
+    toc: TRUE
+---
+
+### Prep the data
+
+This code and corresponding dataset are available on github: https://github.com/kareena-delrosario/regression_rcode
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+p_needed <- c("tidyr",
+          "tidyverse",
+          "dplyr",
+          "haven",
+          "ggplot2",
+          "readxl",
+          "exact2x2",
+          "purrr",
+          "lsr")
+
+packages <- rownames(installed.packages())
+p_to_install <- p_needed[!(p_needed %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(p_needed, library, character.only = TRUE)
+```
+
+
+```{r}
+# read in data
+data <- read_xlsx("/Users/kareenadelrosario/Desktop/local r code/regression_code/data_ttest.xlsx")
+
+head(data)
+```
+
+### Create new variable that selects trust in democrats and republicans
+
+```{r, warning=FALSE, message=FALSE}
+# Option 1: similar to Python
+
+## Trust in democrats
+TrustD <- data[data$PARTY==1, "TRUST"]
+## Trust in republicans
+TrustR <- data[data$PARTY==2, "TRUST"]
+
+# Option 2: dplyr
+
+## Create "trustD" for Democrats
+trustD <- data %>% 
+  filter(PARTY == 1) %>%
+  select(TRUST)
+
+## Create "trustR" for Republicans
+trustR <- data %>%
+  filter(PARTY == 2) %>%
+  select(TRUST)
+  
+```
+
+------
+
+## *Question*: Do Democrats trust in science (above chance, if chance is 75)?
+
+
+### Preview the data
+
+
+#### Base R: hist()
+
+
+```{r, warning=FALSE, message=FALSE}
+# simple histogram - plots frequency
+hist(TrustD$TRUST)
+```
+
+#### ggplot
+
+
+```{r, warning=FALSE, message=FALSE}
+# similar to Python - plots density (scales to 1)
+d_hist_plot <- trustD %>% 
+  ggplot(aes(x = TRUST)) + 
+  geom_histogram(aes(y = ..density..), fill = "cadetblue2", bins = 10, color = "black") +
+  geom_density(color = "#327AAE") +
+  geom_vline(xintercept = 75, color = "red",  size = 1) +
+  labs(x = "Trust in Science", y = "Density") +
+  ggtitle("Democrats Trust in Science") +
+  theme_minimal()
+
+print(d_hist_plot)
+```
+
+### Descriptives
+
+We're going to shorten the mean and sd code to make our descriptives easier.
+
+```{r}
+mymean <- partial(mean, na.rm = TRUE)
+mysd <- partial(sd, na.rm = TRUE)
+```
+
+```{r}
+mymean(trustD$TRUST)
+```
+
+```{r}
+mysd(trustD$TRUST)
+```
+
+```{r}
+length(trustD$TRUST)
+```
+
+# One sample t-test
+
+$$ t = \frac{\bar{x} - \mu_0}{s / \sqrt{N}}$$
+
+```{r}
+# manual calculation of t-test
+# mu = population mean (75)
+
+(88.59-75)/(9.59/sqrt(127))
+```
+
+Main function for t-tests
+
+```{r one sample t tests}
+# do Democrats trust in science
+t.test(TrustD$TRUST, mu = 75) # can set specific population mean to test by setting mu
+```
+
+### Check whether TRUST is normally distributed
+
+
+#### Base R: Q-Q Plot
+
+
+```{r, warning=FALSE, message=FALSE}
+qqnorm(trustD$TRUST)
+```
+
+#### ggplot
+
+
+```{r}
+# ggplot approach
+ggplot(trustD, aes(sample = TRUST)) +
+  stat_qq() +
+  stat_qq_line(color = "red") + # add line to see normal dist
+  ggtitle("Q-Q Plot of Democrat Trust") +
+  theme_minimal()
+```
+
+#### Shapiro-Wilk Test
+
+We can also quantitatively test whether the data are normally distributed.
+
+- Democrats
+
+```{r}
+shapiro.test(trustD$TRUST)
+```
+- Republicans
+
+```{r}
+shapiro.test(trustR$TRUST)
+```
+
+#### Wilcoxon Test for non-normal dist
+
+This is the non-parametric test for non-normally distributed data.
+
+With continuity correction (default; treats like it's normally distributed)
+
+```{r}
+wilcox.test(trustD$TRUST)
+```
+
+Without continuity correction (only when you have super small samples)
+
+```{r}
+wilcox.test(trustD$TRUST, mu = 75, correct = FALSE)
+```
+
+----------------
+
+# Two-samples t-test
+
+### Visualize trust by political party
+
+```{r}
+bar_plot_party <- data %>%
+  ggplot(aes(x = PARTY, y = TRUST, fill = PARTY)) + 
+  stat_summary(fun=mean, geom="bar", position = position_dodge(), width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(0.9), width = .1) + # mean_se is an argument that calculates SD (can calculate SE with additional arguments)
+  labs(x = "Party", y = "Trust") + # add title to x and y-axis (labs = "labels")
+  theme_minimal() + # preset theme
+  ggtitle("Trust by Political Party")
+
+bar_plot_party
+```
+
+##### Quick fix for categorical variables that are coded as continuous
+
+```{r}
+bar_plot_party <- data %>%
+  ggplot(aes(x = factor(PARTY), y = TRUST, fill = factor(PARTY))) + 
+  stat_summary(fun=mean, geom="bar", position = position_dodge(), width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(0.9), width = .1) + # mean_se is an argument that calculates SD (can calculate SE with additional arguments)
+  labs(x = "Party", y = "Trust in Science") + # add title to x and y-axis (labs = "labels")
+  theme_classic() + # to match python
+  ggtitle("Trust by Political Party")
+
+bar_plot_party
+```
+
+##### Match python plot
+
+```{r}
+bar_plot_party +
+    scale_x_discrete(labels=c('Democrats', 'Republicans', 'Independents')) + # x-axis labels
+  theme(legend.position = "none") + # no legend
+  ylim(0, 100) + # change y-axis "limits" to 0 to 100
+  scale_fill_manual(values = c("#377eb8", "#e41a1c", "#ffcc33")) # change colors
+```
+
+#### Histogram
+
+```{r, warning = FALSE}
+# we're just going to plot democrats and republicans
+data$PartyLabel <- ifelse(data$PARTY == 1, "Democrats", "Republicans") # assign a label
+
+p <- ggplot(data, aes(x = TRUST, fill = PartyLabel)) +
+  geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.5, bins = 40) +
+  geom_density(alpha = 0.3) + # transparency of density graphs
+  scale_fill_manual(values = c("Democrats" = "#327AAE", "Republicans" = "#F93F17")) + # colors
+  labs(x = "Trust in Science", y = "Density", fill = "Party") + # labels
+  theme_minimal() +
+  guides(fill = guide_legend(title = "Party")) + # title for legend
+  ggtitle("Distribution of Trust in Science among Dems and Reps") +
+  scale_x_continuous(limits=c(0,130)) + # change x-axis to match python
+  scale_y_continuous(limits=c(0,.075)) # change y-axis (alternative to ylim)
+
+print(p)
+
+## If you want to save the image. It'll output to your working directory
+# ggsave("trust.png", plot = p, dpi = 300, width = 8, height = 6)
+```
+
+#### Separate by party using facet_wrap()
+
+Note that they share the same y-axis scale (unlike Python)
+
+```{r, warning = FALSE}
+p + facet_wrap(~PartyLabel)
+```
+
+--------------
+
+# Independent samples t-test
+
+- run an independent sample ttest (between subjects t-test) testing for differences in trust in science between Republicans and Democrats
+
+```{r two sample t tests}
+# Option 1 - default welch correction
+t.test(trustD$TRUST, trustR$TRUST, var.equal = FALSE) # T Test comparing Group 1 to Group 2
+```
+
+```{r}
+# get rid of party 3 (independents)
+df_no_ind <- data %>% 
+  filter(PARTY != 3)
+
+# Option 2 - T-test without welch correction (same as Python)
+t.test(TRUST ~ PARTY, data=df_no_ind, var.equal = T) 
+
+```
+
+```{r}
+# package for effect size
+library(lsr)
+
+cohensD(TRUST ~ PARTY,
+       data = df_no_ind) # reference data without independents
+```
+
+### Check assumptions of normality
+
+#### Visualize with Q-Q Plot
+
+```{r}
+# ggplot approach
+ggplot(df_no_ind, aes(sample = TRUST)) +
+  stat_qq() +
+  stat_qq_line(color = "red") + # add line to see normal dist
+  ggtitle("Q-Q Plot of Trust") +
+  theme_minimal() +
+  facet_wrap(~ PartyLabel) # separate by party
+```
+
+#### Test with Shapiro
+
+```{r}
+# going back to our df with just democrats
+shapiro.test(trustD$TRUST)
+```
+```{r}
+# just republicans
+shapiro.test(trustR$TRUST)
+```
+*How would you interpret the Shapiro test?*
+
+### Mann–Whitney U test
+
+FYI Main difference between this test and the Wilcoxon:
+
+The Mann-Whitney U test (or Wilcoxon rank-sum test) is for two independent samples, while the Wilcoxon signed-rank test is for paired or matched samples.
+
+```{r}
+# not necessary to add the paired argument. Just want to make it clear that this is independent.
+wilcox.test(trustD$TRUST, trustR$TRUST, paired = FALSE) 
+```
+
+-------------
+
+# Paired samples t-test
+
+We need the pre and post measurement in long format (i.e., same variable). We did this before, remember? How do we do that?
+
+HINT: the columns we want to 'pivot' are Pre1 and Post1. We're creating a new column called TimePoint (should have Pre1 and Post1 names) and its values should be in a new column called Belief.
+
+```{r}
+long_df <- data %>% 
+  pivot_longer(cols = c("Pre1", "Post1"),
+               names_to = "TimePoint", 
+               values_to = "Belief")
+
+# check our work
+long_df %>% 
+  select(`Response ID`, TimePoint, Belief)
+```
+
+#### Visualize belief by timepoint
+
+```{r, warning = FALSE}
+bar_plot_paired <- long_df %>%
+  ggplot(aes(x = TimePoint, y = Belief, fill = TimePoint)) + 
+  stat_summary(fun=mean, geom="bar", position = position_dodge(), width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(0.9), width = .1) + #
+  labs(x = "Time Point", y = "Belief") + # add title to x and y-axis (labs = "labels")
+  theme_classic() +
+  ylim(c(0,80))
+
+bar_plot_paired
+```
+
+
+```{r paired t test}
+# using original data where pre and post are separate variables
+t.test(data$Pre1, data$Post1, paired=T) # tests whether difference is significantly different from 0
+```
+Let's manually calculate Cohen's D, borrowing from Madalina's Python code. I'm simplifying it because we just need Cohen's D.
+
+```{r}
+cohen <- function(x1, x2) {
+   xd = x1 - x2
+   Md = mymean(xd)
+   sd = mysd(xd)
+   d = abs(Md) / sd
+   
+   print(d)
+}
+
+cohen(data$Pre1, data$Post1)
+```
+
+#### Wilcoxon Test for paired data
+
+```{r}
+wilcox.test(data$Pre1, data$Post1, paired = TRUE) 
+```
+#### Descriptives for reporting
+
+You can get the means and sds the old-fashioned way, but if you plan to get descriptives from several variables, you might as well build a function.
+
+```{r}
+descriptives <- function(x1, x2) {
+  m1 <- mymean(x1)
+  m2 <- mymean(x2)
+  s1 <- mysd(x1)
+  s2 <- mysd(x2)
+  
+ # Create a data frame for nicer display - could use table() but it's ugly
+  results_df <- data.frame(
+    Metric = c("Mean", "SD"), # 3 columns = metric, pre, post
+    Pre1 = c(m1, s1),
+    Post1 = c(m2, s2)
+  )
+  
+  return(results_df)
+}
+
+descriptives(data$Pre1, data$Post1)
+```
