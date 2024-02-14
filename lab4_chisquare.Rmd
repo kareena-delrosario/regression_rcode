@@ -1,0 +1,331 @@
+---
+title: "Chi-Squares in R"
+author: "Kareena del Rosario"
+output:
+  html_document:
+    theme: cosmo
+    highlight: pygments
+    toc: true
+---
+
+## Knowledge check!
+
+What type of test would you use for each of the following scenarios?
+
+1. They say that there is a 50/50 chance of getting heads (or tails) when you flip a coin. You want to put it to the test by flipping a coin 100 times to see if it matches those chances. What test would you use?
+
+2. The meditation app, Headspace, has released a new version of their app and they want to see if there has been an increase in user satisfaction. They survey the same users before and after the update asking them if they're satisfied with the app (yes or no). How would you test this difference?
+
+3. A small veterinary clinic wants to test the association between dog breed (pug vs french bulldog) and breathing problems (yes or no). The problem is, they have a small sample size. Which test can they use?
+
+---------
+
+```{r setup,include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load packages
+
+```{r packages, message=FALSE, warning=FALSE, results=FALSE}
+p_needed <- c("tidyr",
+          "tidyverse",
+          "dplyr",
+          "haven",
+          "ggplot2",
+          "readxl",
+          "exact2x2",
+          "gmodels",
+          "WebPower")
+
+packages <- rownames(installed.packages())
+p_to_install <- p_needed[!(p_needed %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(p_needed, library, character.only = TRUE)
+```
+
+### Load dataframe
+```{r, warning=FALSE, message=FALSE}
+# read excel files with the 'readxl' package
+df <- read_xlsx("/Users/kareenadelrosario/Desktop/local r code/regression_code/data6.xlsx")
+
+# what variables do we have
+colnames(df)
+```
+
+### Descriptives - CHALLENGE!
+
+Calculate the mean and standard deviation of the *PRE_female* variable, which indicates percent of women chosen
+```{r}
+# Calculate mean
+
+# Calculate sd
+
+```
+
+#### Let's visualize the data in R using a bar graph and histogram like we did in Python
+
+We want to plot the mean and sd of *PRE_female*. ggplot's bar plots does not like it if you don't specify both an x and y-axis. For that reason, we have to get creative
+```{r}
+bar_plot <- df %>%
+  dplyr::select(PRE_female) %>% # we only need this variable
+  pivot_longer(PRE_female) %>% # pivot_longer separates out the variable name "PRE_female" and the value, giving us two new cols: name, value
+  ggplot(aes(x = name, y = value, fill = name)) + # have to add "fill" in aes() if you want to change the color manually later
+  stat_summary(fun=mean, geom="bar", width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = .1) # mean_se is an argument that calculates SD (can calculate SE with additional arguments)
+
+print(bar_plot)
+```
+
+Let's make prettier to match python
+
+If you're interested in more color options, check out RColorBrewer:
+https://r-graph-gallery.com/38-rcolorbrewers-palettes.html
+
+```{r}
+# library(RColorBrewer) # more color options
+
+bar_plot + 
+  theme_classic() +
+  scale_fill_manual(values = "deepskyblue4") +
+  theme(axis.title.x=element_blank(), # get rid of x-axis title
+                 axis.title.y=element_blank())  # get rid of y-axis title
+```
+
+
+#### Density plot
+
+
+```{r, warning = FALSE}
+density_plot <- df %>% 
+  ggplot (aes(PRE_female)) +
+  geom_density() + 
+  scale_x_continuous(limits=c(-0.5,1.5)) + # specify range of x-axis so it doesn't get cut off
+  geom_vline(aes(xintercept=mean(PRE_female)), # add a line that represents the mean
+            color="deepskyblue4", linetype="dashed", size=1) +
+  theme_classic()
+
+print(density_plot)
+```
+
+We can layer the density plot on top of a histogram, if that's more informative
+
+```{r, warning=FALSE}
+density_plot + geom_histogram(aes(y=..density..), fill = "blue", alpha = 0.4, bins = 9) # bins is the width of the histogram bars
+
+```
+
+## Inspect the data
+```{r}
+# What is our range?
+range(df$PRE_female)
+```
+
+```{r}
+# What is the variable class?
+class(df$PRE_female)
+```
+
+```{r}
+# What if you want to see the class of variables for each column in the df
+glimpse(df)
+```
+
+# One-sample chi-square test
+
+#### CHALLENGE: Let's first count how many 0, 1 in PRE_female. How can we do that? 
+
+**hint: we can use dplyr's group_by and count functions**
+
+-----------
+
+
+
+```{r include=FALSE}
+df %>% 
+  group_by(PRE_female) %>% 
+  count()
+```
+
+
+```{r}
+chisq.test(x = table(df$PRE_female)) # for one-sample, need to include table function
+```
+### Calculate the effect size (Cohen's w)
+
+$$w = \sqrt\frac{\chi^2} {N} $$
+
+```{r}
+# Calculate the observed frequencies of 0,1
+observed_freq <- table(df$PRE_female)
+
+# Perform the Chi-square test
+chi_square_result <- chisq.test(observed_freq)
+
+# Total sample size
+N <- sum(observed_freq) 
+
+# Calculate effect size using the equation above
+effect_size <- sqrt(chi_square_result$statistic / N)
+
+# Print the effect size
+print(effect_size)
+```
+
+----------------
+
+# Independent proportions chi-square
+
+## Visualize the data
+
+```{r}
+bar_plot_twogender <- df %>%
+  dplyr::select(PRE_female, PRE_male) %>% # we only need these variable
+  pivot_longer(cols = c(PRE_female, PRE_male), names_to = "category", values_to = "value") %>% # nesting male and female under one category
+  ggplot(aes(x = category, y = value, fill = category)) + # have to add "fill" in aes() if you want to change the color manually later
+  stat_summary(fun=mean, geom="bar", position = position_dodge(), width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(0.9), width = .1) + # mean_se is an argument that calculates SD (can calculate SE with additional arguments)
+  scale_fill_manual(values = c("deepskyblue4", "deepskyblue2")) + # how to add two colors. they're in alphabetical order of the variables (e.g., PRE_female comes before PRE_male)
+  labs(x = "Gender", y = "Mean") + # add title to x and y-axis (labs = "labels")
+  theme_minimal() + # preset theme
+  ggtitle("Means of Female and Males in this Dataframe")
+
+bar_plot_twogender
+```
+
+```{r}
+# Option 1: Classic chi-square output
+chisq.test(df$PRE_female, df$PRE_male)
+```
+
+```{r}
+# Option 2: The kitchen sink
+CrossTable(df$PRE_female, df$PRE_male,
+           fisher = TRUE,
+           chisq = TRUE,
+           expected = TRUE,
+           prop.c = FALSE, # This stops the column proportions from being displayed
+           prop.t = FALSE, # This stops the total proportions from being displayed
+           prop.chisq = FALSE, # This stops the chisquared proportions from being displayed
+           sresid = TRUE, # Produces standardized residuals
+           format = "SPSS") # To see residuals, must use SPSS format
+```
+
+*That's a lot of information. What do we actually care about?*
+
+- Pearson's chi-square has been criticized for being susceptible to Type I error. This test also gives you the Yates continuity correction which is a more conservative version of Pearson's chi-square.
+
+- Copying what we did in Python, let's say we had a small sample. Which test statistic would you use from this output?
+
+```{r}
+# alternative for fisher's exact test
+fisher.test(df$PRE_female, df$PRE_male)
+```
+
+
+### To report this output, we'll need the means and sds for each group.
+```{r}
+df %>% 
+  summarize(mean_female = mean(PRE_female, na.rm = TRUE),
+            mean_male = mean(PRE_male, na.rm = TRUE),
+            sd_female = sd(PRE_female, na.rm = TRUE),
+            sd_male = sd(PRE_male, na.rm = TRUE))
+```
+
+-----------------
+
+# McNemar Test: Repeated measures chi-square
+
+## Visualize the data
+
+Let's copy the code we used to visually compare PRE_female and PRE_male. How would you change it to show PRE_female and POST_female?
+```{r, eval=FALSE}
+bar_plot_prepost <- df %>%
+  dplyr::select(PRE_female, PRE_male) %>% # we only need these variable
+  pivot_longer(cols = c(PRE_female, PRE_male), names_to = "category", values_to = "value") %>% 
+  mutate(category = factor(category, levels = c("PRE_female", "PRE_male"))) %>% # Set the order of factors
+  ggplot(aes(x = category, y = value, fill = category)) + # have to add "fill" in aes() if you want to change the color manually later
+  stat_summary(fun=mean, geom="bar", position = position_dodge(), width = .3) + # plot mean as barplot
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(0.9), width = .1) + # mean_se is an argument that calculates SD (can calculate SE with additional arguments)
+  scale_fill_manual(values = c("cornflowerblue", "deepskyblue4")) + # how to add two colors. they're in the order of the df
+  labs(x = "Time", y = "Mean") + # add title to x and y-axis (labs = "labels")
+  theme_minimal() + # preset theme
+  ggtitle("Means of Pre- and Post-Measures for Women")
+
+print(bar_plot_prepost)
+```
+
+
+```{r}
+# table (var1 = column, var2 = row). No names if two variables 
+table(df$PRE_female, df$POST_female)
+
+# alternative that shows names
+xtabs( ~ PRE_female + POST_female, df)
+```
+How many women are only in the PRE?
+
+__
+
+How many women are only in the POST?
+
+__
+
+How many women do we have in both?
+
+__
+
+
+```{r}
+mcnemar.test(df$PRE_female, df$POST_female, correct = FALSE)
+
+# the continuity correction (default) is a conservative test, best for super small samples and uneven distributions
+
+```
+
+```{r}
+df %>% 
+  summarize(mean_pre = mean(PRE_female, na.rm = TRUE),
+            mean_post = mean(POST_female, na.rm = TRUE),
+            sd_pre = sd(PRE_female, na.rm = TRUE),
+            sd_post = sd(POST_female, na.rm = TRUE))
+```
+
+### What if I want an effect size for McNemar or Fisher's exact test?
+
+We don't typically use Cohen's W for these tests, which captures the strength of an association. Instead, we use an odds ratio. Odds ratios work for any categorical test and they're pretty easy to interpret. Know that it can only compare two variables.
+
+Odds ratio : odds of numerator vs denominator
+
+- odds < 1 = numerator more likely
+- odds > 1 = denomninator more likely
+
+```{r}
+# Option 2
+library(exact2x2)
+
+mcnemar.exact(df$PRE_female, df$POST_female)
+```
+```{r}
+fisher.test(df$PRE_female, df$POST_female)
+```
+
+# Power Analysis
+
+
+Finally, we're going to do a power analysis using the WebPower r package. To do this for a chi-square, we're going to run a power analysis for "tests of proportions." This is also what it's called in G*Power. 
+
+
+```{r}
+# note that alpha = 0.5 is the default argument. 
+# if you're running this post-hoc, include n1 (and n2) 
+
+wp.prop(h = .2, # cohen's h: effect size
+        type = "1p", # 1p = 1 sample, 2p = 2 sample, 2p2n = 2 sample, unequal sample size
+        alpha = .05, 
+        power = .95)
+```
+
