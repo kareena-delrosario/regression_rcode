@@ -1,0 +1,739 @@
+---
+title: "Using contrast coding to understand ANOVA in R"
+author: "Kareena del Rosario"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: readable
+    highlight: arrow
+    toc: true
+    toc_float: true
+    collapsed: true
+    code_download: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+In this dataset, participants are assigned to 1 of 3 conditions:
+
+1. Control condition (recalled a neutral event)
+2. Sad actor (recalled a sad event)
+3. Sad partner (recalled a neutral event but was paired with the sad actor)
+
+These data are dyadic, but for the sake of this tutorial, we're going to ignore that and treat participants as independent.
+
+#### Load the data & libraries
+
+```{r, load data, message=FALSE, warning=FALSE, results='hide'}
+pkgs <- c("tidyverse", "dplyr", "haven", "foreign", "lme4", "plyr", "nlme", "lsr", "emmeans", "afex", "knitr", "kableExtra")
+
+packages <- rownames(installed.packages())
+p_to_install <- pkgs[!(pkgs %in% packages)]
+
+if(length(p_to_install) > 0){
+  install.packages(p_to_install)
+}
+
+lapply(pkgs, library, character.only = TRUE)
+
+
+# Load data
+df<- read_sav("lab5_anova_contrasts.sav")
+```
+
+---------------------
+
+**Study Design:**
+- Participants completed an emotion induction (recall either a sad or neutral event) and then interacted with a stranger where they asked each other questions to get acquainted. 
+
+**Testable research question:**
+- I want to know: Do people feel more (or less) sad after interacting with a sad person? Are there changes in how sad that sad individual feels after the interaction? Does this vary by gender?
+
+**Predictors:**
+- Condition (control x sad actor x sad partner)
+- Gender (female x male)
+
+**Outcome:**
+- Post-interaction sadness (1- not at all to 7- a great deal)
+
+---------------------
+
+# ANOVA with no data prep or pre-analyses
+
+First off, I don't like aov(). The summary function with aov() gives us the omnibus results with type = 1, so we'd have to use Anova from the car package anyway. That said, we're going to use lm(). I promise, they are doing the same thing, they just present different output when you use summary().
+
+```{r, anova no prep}
+fit <- lm(avg_sad_int ~ genderR*condition_3Level, data = df)
+car::Anova(fit, type = "III")
+```
+
+```{r, spss omnibus1, echo=FALSE, out.width='80%'}
+knitr::include_graphics('spss_omnibus.png')
+```
+
+## Why don't these match?
+
+
+
+Why are the degrees of freedom different? What does this tell us?
+
+
+__________
+
+### Let's first check that the variables are in the correct class. 
+
+We're looking at condition_3Level, genderR, and avg_sad_int.
+
+
+```{r}
+glimpse(df)
+```
+Predictors:
+
+- condition_3Level: 1, 2, 3
+- genderR: -1, 1
+
+### Change variable class
+```{r}
+df.f <- df %>% 
+  mutate(condition_3Level = as.factor(condition_3Level),
+         genderR = as.factor(genderR))
+
+# check class
+class(df.f$condition_3Level)
+class(df.f$genderR)
+```
+
+## Now, let's rerun the model with categorical predictors
+
+```{r, anova 2 with categorical}
+fit2 <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.f)
+car::Anova(fit2, type = "III")
+```
+```{r echo=FALSE, out.width='80%'}
+knitr::include_graphics('spss_omnibus.png')
+```
+
+
+It still doesn't match. What else could be going on?
+
+
+What does the omnibus test tell us?
+
+
+------------
+
+# What is ANOVA?
+
+The F-ratio represents how good the model is relative to how bad it is. In other words, it is the ratio of explained variance to unexplained variance.
+
+In ANOVA, we're asking: is predicting scores from the group means better than predicting scores from the grand mean? Are the groups' outcomes significantly different from each other?
+
+The equations will be variations of one basic equation:
+
+$$deviation = \sum(observed-model)^2$$
+
+### Total Sum of Squares (SST)
+
+This is the total amount of variation in our data. It's the difference between the observed data point and the grand mean. Then we square these differences and add them together.
+
+It's the "grand variance" or the variance in responses regardless of group.
+
+$$SST = \sum^N_{i=1}(Y_i-\overline{Y})^2$$
+
+$$Y_i\ represents\ each \ individual\  observation. $$
+$$\overline{Y} \ is \ the\ grand\ mean. $$
+$$N\ is\ the\ total \ number\ of\ observations. $$
+
+### Between-Group Sum of Squares (SSB)
+(aka model sum of squares)
+
+How much of the variation can the model explain? In simple terms, it's the differences between the predicted values and the grand mean.
+
+$$SSB = \sum^k_{j=1}n_j(\overline{Y}_j-\overline{Y})^2$$
+
+$$\overline{Y}_j\ is\ the \ mean\ of\ group\ j. $$
+
+
+$$n_j \ is \ the\ number\ mean\ of\ observations\ in\ group\ j. $$
+
+
+$$k\ is\ the\ total \ number\ of\ groups. $$
+
+### Within-Group Sum of Squares (SSW)
+(aka residual sum of squares)
+
+This is the variance within each group. So how much of the variance is not due to group differences, but instead due to extraneous factors like individual differences? In other words, this is the variance that *cannot* be explained by the model.
+
+$$SSW =\sum^{n}_{i=1}({Y}_{ij}-\overline{Y}_j)^2$$
+
+$${Y}_{ij}\ represents\ each \ observation\ in\ group\ j. $$
+
+**In short, SSB tells us how much variation is due to the model and SSW tells us how much variation cannot be explained by the model (error)**
+
+
+### Mean Squares
+
+One issue with that formula is because the values are summed values, they will be influenced by the total number of scores summed. To get rid of this bias, we calculate the mean squares, which is the average sum of squares (SS divided by df).
+
+
+#### Mean Squares Between
+
+This is the average amount of variance explained by the model.
+
+$$MSB = \frac{SSB}{df_B} $$
+
+
+#### Mean Squares Within
+
+This is the average amount of variance **not** explained by the model.
+
+$$MSW = \frac{SSW}{df_W} $$
+
+### F-statistic
+
+This is the ratio of variance explained by the model (systematic variance) to the variance not explained by the model (unsystematic variance)
+
+If the F is above 1, that tells us that there was some effect of the predictor above and beyond the individual differences that could explain the outcome (but, this doesn't tell us if it's significant. Just the direction).
+
+If the F is below 1, you know that there's more error in the model than systematic variance.
+
+$$F = \frac{MSB}{MSW} $$
+
+**tldr; the F-statistic tells us whether our model fitted to the data accounts for more variation (good) than extraneous factors (bad), but it doesn't tell us where these differences between groups are.** 
+
+For example, if we're looking at differences in sleep quality by race and we get a significant effect, that tells us that different races do report differences in sleep quality (relative to the grand mean). However, it does not tell us which races sleep better or worse than each other.
+
+
+## SS Types
+
+Imagine we're testing the effect of various health behaviors (diet, sleep) on mood. 
+
+#### Type I Sums of Squares
+
+This approach is useful if we think the sequence matters, like if we believe sleep needs to be considered before diet. Tells us the story in sequence (first sleep, then diet) and how each step adds to mood.
+
+#### Type II Sum of Squares
+
+Now, let's say we want to understand the unique impact of diet on mood, ignoring whether or not they're sleeping well, and vice versa. Type II sums of squares focus on the individual contribution of each factor without mixing them up. It's like evaluating the influence of diet and sleep separately, assuming they don't interact.
+
+#### Type III Sum of Squares
+
+Lastly, we consider the scenario where we want to understand the influence of diet and sleep on mood, including how they might interact (e.g., does the impact of diet depend on whether they slept well?). Type III sums of squares let us see the full picture, considering all possible interactions. This is best when our experiment is complex (e.g., group sizes vary, or we expect that the factors might affect each other). 
+
+I only ever use Type III.
+
+------
+
+# Detour into contrast coding
+
+Our main takeaway from ANOVA is that the omnibus looks at the effect of the predictor(s) relative to the grand mean (or the DV when the predictors are at their average level). With that in mind, we need to make sure our variables are actually coded in that way.
+
+Contrast coding is a way to compare different levels/groups of a categorical variable. The most common contrasts are dummy coding and effects coding.
+
+### Dummy coding
+
+This is the most common form of contrast coding. In dummy coding, one level of the categorical variable is chosen as a reference group. For example, if you have a variable "Race" with three levels (White, Black, Asian), you can create two dummy variables: the effect of being Black and the effect of being Asian. The reference group (White) gets coded as 0 in both new variables. The intercept represents the mean outcome for the reference group. 
+
+White = 1
+Black = 2
+Asian = 3
+
+
+| Race  | Dummy1 | Dummy2 |
+|-------|--------|--------|
+| White | 0      | 0      |
+| Black | 1      | 0      |
+| Asian | 0      | 1      |
+
+| Dummy 1: outcome for Black participants vs reference (White)
+| Dummy 2: outcome for Asian participants vs reference (White)
+| Intercept = average sleep quality when predictor is zero (sleep for White participants)
+
+### Effects coding
+
+Unlike dummy coding, where the reference category is represented by all 0's, effects coding doesn't leave out one category as the reference. Instead, categories are coded with numbers that balance out, such that the sum of codes for each categorical level across all coded variables equals zero. This balance allows the model's intercept to represent the grand mean. You would use this coding scheme if you wanted to compare the mean of each group to the grand mean. The reference group gets -1 for both effects.
+
+The sum of your contrasts should = 0.
+
+| Race  |Effect1 |Effect2 |
+|:------|:-------|:-------|
+| White | 1      | 0      |
+| Black | 0      | 1      |
+| Asian | -1     | -1     |
+
+
+| Effect 1: compares the effect of White to the overall mean
+| Effect 2: compares the effect of Black to the overall mean
+| Intercept = grand mean across all categories of race 
+
+
+**tldr; Dummy coding gives us the "simple effects," comparing different levels to a *reference group* while effects coding gives us the "main effects," comparing different levels to the *group mean* **
+
+<br><br>
+
+--------
+
+#### Challenge! 
+
+Name the comparisons below.
+
+**1. Testing the effect of a new medication using treatment and control groups. How would you interpret the intercept? How would you interpret the effect of group?**
+
+| Group     | Column1|
+|:----------|:-------|
+| Control   | 0      | 
+| Treatment | 1      |
+
+
+
+
+**2. Now we're testing the effect of different dosages of the same medication to the control group. How would you interpret the intercept? What does level 1 (column 1) look at? How about level 2 (column 2)?**
+
+
+| Group      | Column1 | Column 2|
+|:-----------|:--------|:--------|
+| Control    | 0       | 0       |
+| Low Dose   | 1       | 0       |
+| High Dose  | 0       | 1       |
+
+
+
+**3. We recoded the groups. How would you interpret the intercept? What does level 1 (column 1) look at? How about level 2 (column 2)?**
+
+
+| Group      | Column1 | Column 2 |
+|:-----------|:--------|:---------|
+| Control    | 1       | 0        |
+| Low Dose   | 0       | 1        |
+| High Dose  | -1      | -1       |
+
+
+
+**4. One more...we've recoded the groups again. How would you interpret the intercept? What does level 1 (column 1) look at? How about level 2 (column 2)?**
+
+
+| Group      | Column1 | Column 2 |
+|:-----------|:--------|:---------|
+| Control    | 0       | 2        |
+| Low Dose   | 1       | -1       |
+| High Dose  | -1      | -1       |
+
+
+
+------------
+
+## How are our variables coded?
+
+```{r}
+contrasts(df.f$genderR)
+
+```
+
+**Identifiers:**
+
+* -1 = Female
+
+* 1 = Male
+
+<br>
+
+**Contrasts:**
+
+* 0 = Female
+
+* 1 = Male
+
+**How does this impact our interpretation of the intercept?**
+* Average sadness after the interaction for men (when genderR = 0)
+
+
+```{r}
+contrasts(df.f$condition_3Level)
+```
+
+**Identifiers:**
+
+* 1 = Control dyad
+
+* 2 = Sad actor
+
+* 3 = Sad partner
+
+<br>
+
+**Contrasts:**
+
+FIRST EFFECT: what is the effect of sad actor vs control condition?
+
+<br>
+
+SECOND EFFECT: what is the effect of sad partner vs control condition?
+
+<br>
+
+------------
+
+# How does SPSS set up the contrasts?
+
+#### Intercept
+
+Intercept = average all levels 
+
+```{r echo=FALSE, out.width='30%'}
+knitr::include_graphics('spss_intercept_contrasts.png')
+```
+
+
+#### Gender
+
+
+* female -1, but coded as 1
+* male 1, but coded as -1
+* when condition = 0 (average collapsing across condition)
+
+```{r echo=FALSE, out.width='45%'}
+knitr::include_graphics('spss_gender_contrasts.png')
+```
+
+
+#### Condition
+
+
+* when gender = 0 (average collapsing across gender)
+* CONTRAST 1 = control (1) vs sad partner (3)
+* CONTRAST 2 = sad actor (2) vs sad partner(3)
+
+```{r echo=FALSE, out.width='50%'}
+knitr::include_graphics('spss_condition_contrasts.png')
+```
+
+### Change reference groups
+
+
+#### Gender contrasts
+
+
+```{r}
+genderContrasts <- matrix(c(1,-1),
+                          nrow = 2, ncol = 1, byrow = FALSE)
+
+contrasts(df.f$genderR) = genderContrasts
+
+print(contrasts(df.f$genderR))
+```
+
+
+
+#### Condition contrasts
+
+
+```{r}
+effectContrasts <- matrix(c(1, 0,
+                            -1, 1, 
+                            -1, 0 ),
+                          nrow = 3, ncol = 2, byrow = FALSE)
+
+contrasts(df.f$condition_3Level) = effectContrasts
+
+print(contrasts(df.f$condition_3Level))
+```
+
+
+### Rerun the omnibus test
+
+
+```{r}
+fit3 <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.f)
+car::Anova(fit3, type = "III")
+```
+
+```{r echo=FALSE, out.width='80%'}
+knitr::include_graphics('spss_omnibus.png')
+```
+
+
+Yay! It matches.
+
+    Note: technically, contrast coding shouldn't influence the omnibus test. By definition, the omnibus test is supposed to compare the group means to the grand mean. SPSS and SAS take care of this by contrast coding in the background. As you can see from the omnibus and summary statistics in R, R expects you to understand what's going on 'under the hood'
+
+
+
+#### Now let's break down these effects
+
+```{r}
+summary(fit3)
+```
+
+
+#### Does it match SPSS output?
+
+
+```{r echo=FALSE, out.width='80%'}
+knitr::include_graphics('spss_parameters.png')
+```
+
+No it does not. Why might that be?
+
+
+#### How is gender coded?
+
+
+```{r echo=FALSE, out.width='50%'}
+knitr::include_graphics('spss_gender_contrasts2.png')
+```
+
+
+#### How is condition coded?
+
+
+```{r echo=FALSE, out.width='50%'}
+knitr::include_graphics('spss_condition_contrasts2.png')
+```
+
+
+### Recode variables to match SPSS
+
+
+
+#### Gender
+
+```{r}
+genderContrasts2 <- matrix(c(1, 0), 
+                           nrow = 2, ncol = 1, byrow = FALSE)
+contrasts(df.f$genderR) = genderContrasts2
+
+print(contrasts(df.f$genderR))
+```
+
+
+
+#### Condition
+
+```{r}
+conditionContrasts2 <- matrix(c(1, 0, 0,
+                             0, 1, 0), 
+                           nrow = 3, ncol = 2, byrow = FALSE)
+
+contrasts(df.f$condition_3Level) = conditionContrasts2
+
+print(contrasts(df.f$condition_3Level))
+```
+```{r}
+fit4 <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.f)
+summary(fit4)
+```
+
+Woohoo! It matches.
+
+---------------
+
+# Do I have to go through this process any time I want to run an ANOVA in R?
+
+It's important that you understand what's going on "under the hood," but we can shorten this process.
+
+Let's demonstrate the steps using our original dataframe
+
+## Step 1: Convert numeric predictors to factor variables
+
+```{r}
+df.short <- df %>% 
+  mutate(condition_3Level = as.factor(condition_3Level),
+         genderR = as.factor(genderR))
+```
+
+
+## Step 2: Contrast code for the omnibus test
+
+We actually don't have to create our contrasts from scratch. We can use these R functions to automatically contrast code our variables.
+```{r}
+# effect-code
+contr.sum(3)
+```
+
+```{r}
+# dummy code
+contr.treatment(3)
+```
+
+
+Apply contrasts (effect code)
+
+```{r}
+contrasts(df.short$genderR) <- contr.sum(2)
+contrasts(df.short$condition_3Level) <- contr.sum(3)
+```
+
+
+## Step 3a: Run omnibus test
+
+```{r}
+model_shortcut <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.short)
+
+car::Anova(model_shortcut, type = "III")
+```
+
+
+Apply contrasts (dummy code)
+
+```{r}
+contrasts(df.short$genderR) <- contr.treatment(2)
+contrasts(df.short$condition_3Level) <- contr.treatment(3)
+```
+
+
+## Step 4a: Run regression to get simple effects
+
+Be mindful that this approach defaults to a different reference group than SPSS (notice Condition =1 is missing from the R output and Condition =3 is missing from the SPSS output). It's not wrong, but good to know that their default settings are different.
+
+```{r}
+model_shortcut2 <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.short)
+
+summary(model_shortcut2)
+```
+
+
+## Step 3b: Change reference group to match SPSS
+
+```{r}
+# base is reference (it doesn't take negative numbers, but we're telling it we want the reference to be the higher number of the two)
+contrasts(df.short$genderR) <- contr.treatment(2, base = 2)
+
+contrasts(df.short$condition_3Level) <- contr.treatment(3, base = 3)
+
+```
+
+
+## Step 4b: Run regression to get simple effects to match SPSS
+
+```{r}
+model_shortcut3 <- lm(avg_sad_int ~ genderR*condition_3Level, data = df.short)
+
+summary(model_shortcut3)
+```
+
+
+# Do I really have to do all that just for ANOVA?
+
+No, but it's important that you understand how ANOVA works. Here's an actual shortcut that defaults to SS type 3 and does not require you to contrast code. You can run the pairwise comparisons as you normally would.
+
+### Omnibus shortcut
+
+```{r, messages= FALSE, warning=FALSE}
+# we don't even need to convert numeric predictors to factor. It does that for us.
+
+# omnibus test
+shortcut_model <- afex::aov_car(avg_sad_int ~ genderR*condition_3Level + 
+                Error(ID), # must add the error term (i.e. ID)
+              data = df) # original dataframe
+
+print(shortcut_model)
+```
+
+----------
+
+# Pairwise comparisons to breakdown interactions
+
+```{r}
+emm <- emmeans(model_shortcut3, specs = c("genderR", "condition_3Level"))
+
+pairs(emm, simple = "each")
+```
+```{r}
+pairs(emm, adjust = "tukey")
+```
+
+
+#### Alternative formatting
+
+
+```{r}
+kable(pairs(emm, adjust = "tukey"), "simple", digits = 3) 
+```
+
+```{r}
+kable(pairs(emm, adjust = "bonferroni"), "simple", digits = 3) 
+```
+
+
+## Replicate Madalina's Python code
+
+```{r, warning=FALSE}
+m_df_og <- readxl::read_xlsx("data_ANOVA.xlsx")
+```
+
+```{r}
+m_df <- m_df_og %>% 
+  group_by(partnum) %>% 
+  dplyr::summarise(across(everything(), ~ mean(., na.rm = TRUE)) )%>% 
+  ungroup()
+
+head(m_df)
+```
+
+### One-way ANOVA
+
+```{r}
+oneway_model <- afex::aov_car(RdeltaB ~ party + Error(partnum), 
+              data = m_df) # original dataframe
+
+print(oneway_model)
+```
+
+### Two-way ANOVA
+
+```{r}
+# change to type = 2 to match python
+twoway_model <- afex::aov_car(RdeltaB ~ party*twitter + Error(partnum),
+                              type = "II",
+                              data = m_df) 
+print(twoway_model)
+```
+### Repeated Measures ANOVA
+
+Here, I'm showing you two different ways to run a repeated measures ANOVA with the afex package. The first is the aov_car function, which takes a lm-style formula. 
+
+```{r, warning=FALSE}
+# within the Error statement, we're saying that within each partnum (ID), sci_anec and pop_unpop are repeated.
+
+# remember this 'nesting' format. It will come up again when we run mixed models.
+
+repeated_model1 <- afex::aov_car(RdeltaB ~ 1 + Error(partnum/(sci_anec*pop_unpop)),
+                             data = m_df_og)
+
+knitr::kable(nice(repeated_model1))
+```
+
+
+Now, we're going to use a different function from the afex package called aov_ez. The only difference is that aov_ez takes character arguments (like you literally enter what your between and within variables are) instead of a formula.
+
+```{r, warning=FALSE}
+repeated_model2 <- afex::aov_ez(id = "partnum", 
+                             dv = "RdeltaB", 
+                             within = c('sci_anec', 'pop_unpop'),
+                             data = m_df_og) 
+
+knitr::kable(nice(repeated_model2))
+
+summary(repeated_model2)
+```
+
+#### What about Mauchly's test of sphericity?
+
+Mauchly's test of sphericity is only applicable when you have more than two levels in at least one of your within-participant (repeated measures) factors. This is because sphericity is a concept that applies to the variances of the differences between all combinations of levels within a factor. If a factor only has two levels, the assumption of sphericity is inherently met because there's only one possible difference to consider, thus no variability in these differences across levels to test against.
+
+```{r, warning = FALSE}
+library(ez)
+
+mod<- ezANOVA(data = m_df_og, dv = .(RdeltaB), wid = .(partnum),
+              within = .(sci_anec,pop_unpop),
+              detailed = TRUE,
+              type = 3)
+
+mod
+```
+
